@@ -1,2 +1,2 @@
 # rvt_detector
-detect installed rvt and versions of rvt files. 
+Simple python helper for Revit model version and install path detection.
