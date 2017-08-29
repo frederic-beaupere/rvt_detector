@@ -7,6 +7,7 @@ Simple helper to:
 import winreg
 import sys
 import re
+import string
 import olefile
 
 __version__ = "0.2.0"
@@ -40,23 +41,41 @@ def get_rvt_file_version(rvt_file):
 
 def get_rvt_info(rvt_file):
     """
-    Finds rvt file info in BasicFileInfo stream of rvt file ole structure.
+    Finds rvt file info in BasicFileInfo stream of rvt file ole structure:
+    Worksharing
+    Central Model Path, Revit Build, Last Save Path, Local Changes Saved To Central
+    Central model's version number, Unique Document GUID, Unique Document Increments
     :param rvt_file: model file path
     :return:dict: rvt_file information found
     """
     rvt_info = {}
     file_info = get_basic_info(rvt_file)
 
-    rvt_ver_pattern = re.compile(r" \d{4} ")
-    rvt_file_version = re.search(rvt_ver_pattern, file_info)[0].strip()
-    rvt_info["rvt_file_version"] = rvt_file_version
+    for line in file_info.split("\r\n"):
+        line = bytes(line, 'utf-8').decode('utf-8', 'ignore')
+        if "Worksharing:" in line:
+            if "Worksharing: Not enabled" in line:
+                rvt_info["rvt_file_ws"] = False
+            else:
+                rvt_info["rvt_file_ws"] = True
+        elif "Central Model Path:" in line:
+            rvt_info["CentralModelPath"] = line.split()[-1]
+        elif "Revit Build:" in line:
+            rvt_ver_pattern = re.compile(r" \d{4} ")
+            rvt_file_version = re.search(rvt_ver_pattern, file_info)[0].strip()
+            rvt_info["rvt_file_version"] = rvt_file_version
+        elif "Last Save Path:" in line:
+            rvt_info["LastSavePath"] = line.split()[-1]
+        elif "Local Changes Saved To Central:" in line:
+            rvt_info["LocalChangesSavedToCentral"] = line.split()[-1]
+        elif "Central model's version number:" in line:
+            rvt_info["CentralModelVersionNumber"] = line.split()[-1]
+        elif "Unique Document GUID:" in line:
+            rvt_info["DocGUID"] = line.split()[-1]
+        elif "Unique Document Increments:" in line:
+            doc_inc = [c for c in line.split()[-1] if c in string.printable][0]
+            rvt_info["UniqueDocumentIncrements"] = doc_inc
 
-    rvt_not_ws_pattern = re.compile(r"Worksharing: Not enabled")
-    rvt_file_not_ws = re.search(rvt_not_ws_pattern, file_info)[0].strip()
-    if rvt_file_not_ws:
-        rvt_info["rvt_file_ws"] = False
-    else:
-        rvt_info["rvt_file_ws"] = True
     return rvt_info
 
 
