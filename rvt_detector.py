@@ -9,8 +9,10 @@ import sys
 import re
 import string
 import olefile
+import pefile
 
-__version__ = "0.2.0"
+
+__version__ = "0.3.0"
 
 
 def get_basic_info(rvt_file):
@@ -122,3 +124,21 @@ def installed_rvt_detection():
         rvt_install_paths[rvt_install_version] = exe_location
 
     return rvt_install_paths
+
+
+def get_revit_version_from_path(rvt_install_path):
+    """
+    Finds version of Revit.exe from provided path
+    :return:str: Revit version e.g. '2017'
+    """
+
+    def LOWORD(dword):
+        return dword & 0x0000ffff
+
+    def HIWORD(dword):
+        return dword >> 16
+
+    pe = pefile.PE(rvt_install_path)
+    ms = pe.VS_FIXEDFILEINFO.ProductVersionMS
+    ls = pe.VS_FIXEDFILEINFO.ProductVersionLS
+    return '20{}'.format(HIWORD (ms))
