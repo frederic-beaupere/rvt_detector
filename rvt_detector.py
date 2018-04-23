@@ -177,3 +177,4 @@ def get_revit_version_from_path(rvt_install_path):
     ms = pe.VS_FIXEDFILEINFO.ProductVersionMS
     ls = pe.VS_FIXEDFILEINFO.ProductVersionLS
     return '20{}'.format(HIWORD (ms))
+
