@@ -10,6 +10,8 @@ import re
 import string
 import olefile
 import pefile
+from xml.etree import ElementTree
+from collections import defaultdict
 
 
 __version__ = "0.3.0"
@@ -39,6 +41,20 @@ def get_rvt_file_version(rvt_file):
     pattern = re.compile(r" \d{4} ")
     rvt_file_version = re.search(pattern, file_info)[0].strip()
     return rvt_file_version
+
+
+def get_transmission_data(rvt_file):
+    """
+    Searches and returns the TransmissionData stream in the rvt file ole structure.
+    :param rvt_file: model file path
+    :return:str: TransmissionData
+    """
+    if olefile.isOleFile(rvt_file):
+        rvt_ole = olefile.OleFileIO(rvt_file)
+        transmission_data = rvt_ole.openstream("TransmissionData").read().decode("utf-16le", "ignore")
+        return transmission_data
+    else:
+        print("file does not appear to be an ole file: {}".format(rvt_file))
 
 
 def get_rvt_info(rvt_file):
@@ -79,6 +95,25 @@ def get_rvt_info(rvt_file):
             rvt_info["UniqueDocumentIncrements"] = doc_inc
 
     return rvt_info
+
+
+def get_linked_rvt_info(rvt_file):
+    """
+    Finds link reference info per link id
+    :return:dict: link info keyed per id
+    """
+    tm_data = get_transmission_data(rvt_file)
+    re_tm_data = re.compile("(<\?xml version=(?s).+)")
+    tm_xml = re.findall(re_tm_data, tm_data)
+    root = ElementTree.fromstring(tm_xml[0])
+    rvt_links = defaultdict(dict)
+    for ext_ref in root.findall('ExternalFileReference'):
+        ext_id = ext_ref.find('ElementId').text
+        ref_type = ext_ref.find('ExternalFileReferenceType').text
+        if ref_type == 'Revit Link':
+            for child in ext_ref.getchildren():
+                rvt_links[ext_id][child.tag] = child.text
+    return rvt_links
 
 
 def installed_rvt_detection():
@@ -142,3 +177,4 @@ def get_revit_version_from_path(rvt_install_path):
     ms = pe.VS_FIXEDFILEINFO.ProductVersionMS
     ls = pe.VS_FIXEDFILEINFO.ProductVersionLS
     return '20{}'.format(HIWORD (ms))
+
