@@ -7,25 +7,28 @@ Simple helper to:
 import winreg
 import sys
 import re
-import string
 import olefile
 import pefile
 from xml.etree import ElementTree
 from collections import defaultdict
 
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 
-def get_basic_info(rvt_file):
+def get_basic_info(rvt_file, cleaned_str=False):
     """
     Searches and returns the BasicFileInfo stream in the rvt file ole structure.
+    :param cleaned_str: removes nullbytes from return string
     :param rvt_file: model file path
     :return:str: BasicFileInfo
     """
     if olefile.isOleFile(rvt_file):
         rvt_ole = olefile.OleFileIO(rvt_file)
-        basic_info = rvt_ole.openstream("BasicFileInfo").read().decode("utf-16le", "ignore")
+        basic_info = rvt_ole.openstream("BasicFileInfo").read().decode("ascii")
+        if cleaned_str:
+            re_nullbytes = re.compile(r"\x00")
+            basic_info = re.sub(re_nullbytes, "", basic_info)
         return basic_info
     else:
         print("file does not appear to be an ole file: {}".format(rvt_file))
@@ -37,21 +40,30 @@ def get_rvt_file_version(rvt_file):
     :param rvt_file: model file path
     :return:str: rvt_file_version
     """
-    file_info = get_basic_info(rvt_file)
-    pattern = re.compile(r" \d{4} ")
-    rvt_file_version = re.search(pattern, file_info)[0].strip()
+    file_info = get_basic_info(rvt_file, cleaned_str=True)
+    re_version = re.compile(r"Format: (\d{4})")
+    found = re.findall(re_version, file_info)
+    if found:
+        rvt_file_version = found[0]
+    else:
+        re_version = re.compile(r"Autodesk Revit (\d{4})")
+        rvt_file_version = re.findall(re_version, file_info)[0]
     return rvt_file_version
 
 
-def get_transmission_data(rvt_file):
+def get_transmission_data(rvt_file, cleaned_str=False):
     """
     Searches and returns the TransmissionData stream in the rvt file ole structure.
+    :param cleaned_str: removes nullbytes from return string
     :param rvt_file: model file path
     :return:str: TransmissionData
     """
     if olefile.isOleFile(rvt_file):
         rvt_ole = olefile.OleFileIO(rvt_file)
-        transmission_data = rvt_ole.openstream("TransmissionData").read().decode("utf-16le", "ignore")
+        transmission_data = rvt_ole.openstream("TransmissionData").read().decode("ascii")
+        if cleaned_str:
+            re_nullbytes = re.compile(r"\x00")
+            transmission_data = re.sub(re_nullbytes, "", transmission_data)
         return transmission_data
     else:
         print("file does not appear to be an ole file: {}".format(rvt_file))
@@ -67,32 +79,32 @@ def get_rvt_info(rvt_file):
     :return:dict: rvt_file information found
     """
     rvt_info = {}
-    file_info = get_basic_info(rvt_file)
+    file_info = get_basic_info(rvt_file, cleaned_str=True)
 
-    for line in file_info.split("\r\n"):
-        line = bytes(line, 'utf-8').decode('utf-8', 'ignore')
-        if "Worksharing:" in line:
-            if "Worksharing: Not enabled" in line:
-                rvt_info["rvt_file_ws"] = False
-            else:
-                rvt_info["rvt_file_ws"] = True
-        elif "Central Model Path:" in line:
-            rvt_info["CentralModelPath"] = line.split()[-1]
-        elif "Revit Build:" in line:
-            rvt_ver_pattern = re.compile(r" \d{4} ")
-            rvt_file_version = re.search(rvt_ver_pattern, file_info)[0].strip()
-            rvt_info["rvt_file_version"] = rvt_file_version
-        elif "Last Save Path:" in line:
-            rvt_info["LastSavePath"] = line.split()[-1]
-        elif "Local Changes Saved To Central:" in line:
-            rvt_info["LocalChangesSavedToCentral"] = line.split()[-1]
-        elif "Central model's version number:" in line:
-            rvt_info["CentralModelVersionNumber"] = line.split()[-1]
-        elif "Unique Document GUID:" in line:
-            rvt_info["DocGUID"] = line.split()[-1]
-        elif "Unique Document Increments:" in line:
-            doc_inc = [c for c in line.split()[-1] if c in string.printable][0]
-            rvt_info["UniqueDocumentIncrements"] = doc_inc
+    ws_map = {"Not enabled": False, "Enabled": True}
+
+    re_ws = re.compile("Worksharing: (.*)\r\n")
+    rvt_info["rvt_file_ws"] = ws_map.get(re.findall(re_ws, file_info)[0])
+
+    re_central_path = re.compile("Central Model Path: (.*)\r\n")
+    rvt_info["CentralModelPath"] = re.findall(re_central_path, file_info)[0]
+
+    rvt_info["rvt_file_version"] = get_rvt_file_version(rvt_file)
+
+    re_last_save_path = re.compile("Last Save Path: (.*)\r\n")
+    rvt_info["LastSavePath"] = re.findall(re_last_save_path, file_info)[0]
+
+    re_local_saved_to_central = re.compile("Local Changes Saved To Central: (.*)\r\n")
+    rvt_info["LocalChangesSavedToCentral"] = re.findall(re_local_saved_to_central, file_info)[0]
+
+    re_central_version = re.compile("Central model's version number .+: (.*)\r\n")
+    rvt_info["CentralModelVersionNumber"] = re.findall(re_central_version, file_info)[0]
+
+    re_doc_guid = re.compile("Unique Document GUID: (.*)\r\n")
+    rvt_info["DocGUID"] = re.findall(re_doc_guid, file_info)[0]
+
+    re_doc_increments = re.compile("Unique Document Increments: (.*)\r\n")
+    rvt_info["UniqueDocumentIncrements"] = re.findall(re_doc_increments, file_info)[0]
 
     return rvt_info
 
@@ -102,7 +114,7 @@ def get_linked_rvt_info(rvt_file):
     Finds link reference info per link id
     :return:dict: link info keyed per id
     """
-    tm_data = get_transmission_data(rvt_file)
+    tm_data = get_transmission_data(rvt_file, cleaned_str=True)
     re_tm_data = re.compile("(<\?xml version=(?s).+)")
     tm_xml = re.findall(re_tm_data, tm_data)
     root = ElementTree.fromstring(tm_xml[0])
@@ -176,5 +188,5 @@ def get_revit_version_from_path(rvt_install_path):
     pe = pefile.PE(rvt_install_path)
     ms = pe.VS_FIXEDFILEINFO.ProductVersionMS
     ls = pe.VS_FIXEDFILEINFO.ProductVersionLS
-    return '20{}'.format(HIWORD (ms))
+    return '20{}'.format(HIWORD(ms))
 
