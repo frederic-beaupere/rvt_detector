@@ -1,0 +1,14 @@
+[build-system]
+requires = ["flit"]
+build-backend = "flit.buildapi"
+
+[tool.flit.metadata]
+module = "rvt_detector"
+author = "Frederic Beaupere"
+author-email = "beaupere@gmx.de"
+home-page = "https://github.com/frederic-beaupere/rvt_detector"
+description-file = "README.md"
+classifiers = ["License :: OSI Approved :: MIT License"]
+requires = ["olefile (==0.44)", "pefile (==2017.8.1)"]
+requires-python = ">=3"
+
