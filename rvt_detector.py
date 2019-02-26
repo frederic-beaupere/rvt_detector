@@ -13,7 +13,7 @@ from xml.etree import ElementTree
 from collections import defaultdict
 
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 
 def get_basic_info(rvt_file, cleaned_str=False):
@@ -25,7 +25,7 @@ def get_basic_info(rvt_file, cleaned_str=False):
     """
     if olefile.isOleFile(rvt_file):
         rvt_ole = olefile.OleFileIO(rvt_file)
-        basic_info = rvt_ole.openstream("BasicFileInfo").read().decode("ascii")
+        basic_info = rvt_ole.openstream("BasicFileInfo").read().decode("ascii", "ignore")
         if cleaned_str:
             re_nullbytes = re.compile(r"\x00")
             basic_info = re.sub(re_nullbytes, "", basic_info)
@@ -60,7 +60,7 @@ def get_transmission_data(rvt_file, cleaned_str=False):
     """
     if olefile.isOleFile(rvt_file):
         rvt_ole = olefile.OleFileIO(rvt_file)
-        transmission_data = rvt_ole.openstream("TransmissionData").read().decode("ascii")
+        transmission_data = rvt_ole.openstream("TransmissionData").read().decode("ascii", "ignore")
         if cleaned_str:
             re_nullbytes = re.compile(r"\x00")
             transmission_data = re.sub(re_nullbytes, "", transmission_data)
