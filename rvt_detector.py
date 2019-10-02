@@ -1,6 +1,6 @@
 """
 Simple helper to:
- - detect *.rvt info like version or workshare status.
+ - detect *.rvt info like version or worksharing status.
  - detect installed Autodesk Revit versions. (windows only)
 """
 
@@ -115,7 +115,7 @@ def get_linked_rvt_info(rvt_file):
     :return:dict: link info keyed per id
     """
     tm_data = get_transmission_data(rvt_file, cleaned_str=True)
-    re_tm_data = re.compile("(<\?xml version=(?s).+)")
+    re_tm_data = re.compile(r"(<\?xml version=(?s).+)")
     tm_xml = re.findall(re_tm_data, tm_data)
     root = ElementTree.fromstring(tm_xml[0])
     rvt_links = defaultdict(dict)
@@ -149,7 +149,7 @@ def installed_rvt_detection():
 
     while True:
         try:
-            adsk_pattern = r"Autodesk Revit ?(\S* )?\d{4}$"
+            adsk_pattern = r"(Autodesk Revit|Revit) (\d{4})$"
             current_key = winreg.EnumKey(install_keys, index)
             if re.match(adsk_pattern, current_key):
                 rvt_reg_keys[current_key] = index
@@ -158,17 +158,21 @@ def installed_rvt_detection():
             break
         index += 1
 
-    for rk in rvt_reg_keys.keys():
+    for reg_key in rvt_reg_keys.keys():
         version_pattern = r"\d{4}"
-        rvt_install_version = re.search(version_pattern, rk)[0]
+        rvt_install_version = re.search(version_pattern, reg_key)[0]
         reg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
         if python64bit:
-            rvt_reg = winreg.OpenKey(reg, soft_uninstall + "\\" + rk)
+            rvt_reg = winreg.OpenKey(reg, soft_uninstall + "\\" + reg_key)
         elif python32bit:
-            rvt_reg = winreg.OpenKey(reg, soft_uninstall + "\\" + rk, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
-        # print([rk, rvt_reg, install_location])
-        exe_location = winreg.QueryValueEx(rvt_reg, install_location)[0] + "Revit.exe"
-        rvt_install_paths[rvt_install_version] = exe_location
+            rvt_reg = winreg.OpenKey(reg, soft_uninstall + "\\" + reg_key, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+        # print([reg_key, rvt_reg, install_location])
+        try:
+            exe_location = winreg.QueryValueEx(rvt_reg, install_location)[0] + "Revit.exe"
+            # print(exe_location)
+            rvt_install_paths[rvt_install_version] = exe_location
+        except WindowsError:
+            pass
 
     return rvt_install_paths
 
@@ -189,4 +193,3 @@ def get_revit_version_from_path(rvt_install_path):
     ms = pe.VS_FIXEDFILEINFO.ProductVersionMS
     ls = pe.VS_FIXEDFILEINFO.ProductVersionLS
     return '20{}'.format(HIWORD(ms))
-
